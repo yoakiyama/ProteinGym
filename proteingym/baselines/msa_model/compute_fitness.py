@@ -82,7 +82,7 @@ def main():
         raise ValueError("No rows found in the dataframe")
     print(f"df shape: {df.shape}", flush=True)
     # Get all variant positions
-    dms_positions = set(df[mutant_col].apply(lambda x: x.split("|")[1]))
+    dms_positions = set(df[mutant_col].map(lambda x: int(x[1:-1])))
     print(f"Number of DMS positions: {len(dms_positions)}", flush=True)
 
     # Load MSA model
