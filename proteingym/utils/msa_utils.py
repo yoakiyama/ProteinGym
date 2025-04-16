@@ -11,8 +11,8 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 import subprocess
 
-from utils.weights import map_from_alphabet, map_matrix, calc_weights_fast
-
+# from utils.weights import map_from_alphabet, map_matrix, calc_weights_fast
+from weights import map_from_alphabet, map_matrix, calc_weights_fast
 # constants
 GAP = "-"
 MATCH_GAP = GAP

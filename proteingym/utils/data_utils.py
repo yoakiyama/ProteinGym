@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
-from utils.scoring_utils import get_mutated_sequence
+# from utils.scoring_utils import get_mutated_sequence
+from scoring_utils import get_mutated_sequence
 
 def DMS_file_cleanup(DMS_filename, target_seq, start_idx=1, end_idx=None, DMS_mutant_column='mutant', DMS_phenotype_name='score', DMS_directionality=1, AA_vocab = "ACDEFGHIKLMNPQRSTVWY"):
     """
