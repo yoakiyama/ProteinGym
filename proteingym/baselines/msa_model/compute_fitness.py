@@ -81,6 +81,9 @@ def main():
     if len(df) == 0:
         raise ValueError("No rows found in the dataframe")
     print(f"df shape: {df.shape}", flush=True)
+    # Get all variant positions
+    dms_positions = set(df[mutant_col].apply(lambda x: x.split("|")[1]))
+    print(f"Number of DMS positions: {len(dms_positions)}", flush=True)
 
     # Load MSA model
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -160,6 +163,11 @@ def main():
     if args.scoring_strategy == "masked-marginals":
         all_token_probs = []
         for i in tqdm(range(tokenized_msa_t.size(1)), desc="Scoring masked-marginals"):
+            # Skip if position is not in DMS
+            if i+1 not in dms_positions:
+                zero_t = torch.zeros((1, 26))
+                all_token_probs.append(zero_t)
+                continue
             tokenized_msa_masked_t = tokenized_msa_t.clone()
             tokenized_msa_masked_t[0, i] = aa2tok_d['MASK']  # mask out first sequence
             if tokenized_msa_t.size(-1) > 1024:
@@ -171,9 +179,6 @@ def main():
                 start=0
             with torch.no_grad():
                 msa_masked_onehot_t = one_hot(tokenized_msa_masked_t, num_classes=nTokenTypes).float().unsqueeze(0).to(device)
-                # token_probs = torch.log_softmax(
-                #     model(tokenized_msa_masked_t.cuda())["logits"], dim=-1
-                # )
                 token_probs = torch.log_softmax(
                     model(
                         additional_molecule_feats = additional_feats_t,
