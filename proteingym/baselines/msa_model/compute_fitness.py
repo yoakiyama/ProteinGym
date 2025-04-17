@@ -11,6 +11,7 @@ import itertools
 from Bio import SeqIO
 from typing import List, Tuple
 import torch
+import re
 from torch.nn.functional import one_hot
 
 from msa_model.modules import MSAContactModel
@@ -82,7 +83,7 @@ def main():
         raise ValueError("No rows found in the dataframe")
     print(f"df shape: {df.shape}", flush=True)
     # Get all variant positions
-    dms_positions = set(df[mutant_col].map(lambda x: int(x[1:-1])))
+    dms_positions = set(df[mutant_col].map(lambda x: re.findall(r'[A-Z](\d+)[A-Z]', x)).explode().astype(int).tolist())
     print(f"Number of DMS positions: {len(dms_positions)}", flush=True)
 
     # Load MSA model
@@ -164,7 +165,7 @@ def main():
         all_token_probs = []
         for i in tqdm(range(tokenized_msa_t.size(1)), desc="Scoring masked-marginals"):
             # Skip if position is not in DMS
-            if i+1 not in dms_positions:
+            if i+args.offset_idx not in dms_positions:
                 zero_t = torch.zeros((1, 26))
                 all_token_probs.append(zero_t)
                 continue
@@ -172,13 +173,15 @@ def main():
             tokenized_msa_masked_t[0, i] = aa2tok_d['MASK']  # mask out first sequence
             if tokenized_msa_t.size(-1) > 1024:
                 large_tokenized_msa_masked_t=tokenized_msa_masked_t.clone()
-                start, end = get_optimal_window(mutation_position_relative=i, seq_len_wo_special=len(args.sequence)+2, model_window=1024)
+                start, end = get_optimal_window(mutation_position_relative=i, seq_len_wo_special=len(args.sequence), model_window=1024)
                 print("Start index {} - end index {}".format(start,end))
-                tokenized_msa_masked_t = large_tokenized_msa_masked_t[:,:,start:end]
+                tokenized_msa_masked_t = large_tokenized_msa_masked_t[:,start:end]
             else:
                 start=0
             with torch.no_grad():
                 msa_masked_onehot_t = one_hot(tokenized_msa_masked_t, num_classes=nTokenTypes).float().unsqueeze(0).to(device)
+                mask, msa_mask, full_mask, pairwise_mask = prepare_msa_masks(tokenized_msa_masked_t.unsqueeze(0))
+                mask, msa_mask, full_mask, pairwise_mask, additional_feats_t = mask.to(device), msa_mask.to(device), full_mask.to(device), pairwise_mask.to(device), additional_feats_t.to(device)
                 token_probs = torch.log_softmax(
                     model(
                         additional_molecule_feats = additional_feats_t,
@@ -190,7 +193,10 @@ def main():
                     )['logits'], dim=-1
                 )
             all_token_probs.append(token_probs[:, 0, i-start].detach().cpu())  # vocab size
+            print(token_probs[:, 0, i-start].detach().cpu().shape)
         token_probs = torch.cat(all_token_probs, dim=0).unsqueeze(0)
+        print(token_probs.shape)
+        print(args.offset_idx)
         df[f"MSA_model"] = df.apply(
             lambda row: label_row(
                 row[mutant_col], args.sequence, token_probs.detach().cpu(), aa2tok_d, args.offset_idx
